@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Consulta y Predicción sobre Viviendas Turísticas en España</title>
+    <title>Consulta y Predicción sobre Viviendas Turísticas</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -22,16 +22,18 @@
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
+            max-width: 500px;
+            width: 100%;
         }
         h1 {
-            color: #4a90e2;
+            color:rgb(158, 74, 226);
+            text-align: center;
         }
         label {
             display: block;
             margin-top: 10px;
         }
-        input[type="number"], input[type="text"], select {
+        select, input[type="number"] {
             width: 100%;
             padding: 8px;
             margin-top: 5px;
@@ -39,60 +41,66 @@
             border-radius: 4px;
         }
         button {
-            background-color: #4a90e2;
+            background-color: rgb(190, 74, 226);
             color: #fff;
             padding: 10px 15px;
             border: none;
             border-radius: 4px;
             cursor: pointer;
             margin-top: 15px;
+            width: 100%;
         }
         button:hover {
-            background-color: #357ab8;
+            background-color: rgb(194, 80, 150);
+        }
+        #result {
+            margin-top: 20px;
+            font-size: 1.1em;
+            text-align: center;
+        }
+        #error {
+            color: red;
+            margin-top: 20px;
+            text-align: center;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Consulta y Predicción sobre Viviendas Turísticas en España</h1>
+        <h1>Consulta y Predicción sobre Viviendas Turísticas</h1>
         <form id="prediction-form">
-            <label for="Comunidad">Comunidad Autónoma:</label>
-            <select id="Comunidad" name="Comunidad" required>
+
+            <label for="Comunidades">Comunidad Autónoma:</label>
+            <select id="Comunidades" name="Comunidades" required>
+                <option value="">Selecciona una comunidad</option>
                 <option value="Andalucía">Andalucía</option>
                 <option value="Aragón">Aragón</option>
-                <option value="Asturias">Asturias</option>
-                <option value="Baleares">Baleares</option>
+                <option value="Asturias, Principado de">Asturias, Principado de</option>
+                <option value="Balears, Illes">Balears, Illes</option>
                 <option value="Canarias">Canarias</option>
                 <option value="Cantabria">Cantabria</option>
                 <option value="Castilla y León">Castilla y León</option>
-                <option value="Castilla-La Mancha">Castilla-La Mancha</option>
+                <option value="Castilla - La Mancha">Castilla - La Mancha</option>
                 <option value="Cataluña">Cataluña</option>
-                <option value="Comunidad Valenciana">Comunidad Valenciana</option>
+                <option value="Comunitat Valenciana">Comunitat Valenciana</option>
                 <option value="Extremadura">Extremadura</option>
                 <option value="Galicia">Galicia</option>
-                <option value="Madrid">Madrid</option>
-                <option value="Murcia">Murcia</option>
-                <option value="Navarra">Navarra</option>
+                <option value="Madrid, Comunidad de">Madrid, Comunidad de</option>
+                <option value="Murcia, Región de">Murcia, Región de</option>
+                <option value="Navarra, Comunidad Foral de">Navarra, Comunidad Foral de</option>
                 <option value="País Vasco">País Vasco</option>
-                <option value="La Rioja">La Rioja</option>
+                <option value="Rioja, La">Rioja, La</option>
                 <option value="Ceuta">Ceuta</option>
                 <option value="Melilla">Melilla</option>
             </select>
 
-            <label for="Provincias_Cod">Código de Provincia:</label>
-            <input type="number" id="Provincias_Cod" name="Provincias_Cod" required>
+            <label for="Provincias">Provincia:</label>
+            <select id="Provincias" name="Provincias" required>
+                <option value="">Selecciona primero una comunidad</option>
+            </select>
 
             <label for="Año">Año:</label>
-            <select id="Año" name="Año" required>
-                <option value="2023">2023</option>
-                <option value="2024">2024</option>
-                <option value="2025">2025</option>
-                <option value="2026">2026</option>
-                <option value="2027">2027</option>
-                <option value="2028">2028</option>
-                <option value="2029">2029</option>
-                <option value="2030">2030</option>
-            </select>
+            <input type="number" id="Año" name="Año" placeholder="Escribe un año (ejemplo: 2030)" required>
 
             <label for="Mes">Mes:</label>
             <select id="Mes" name="Mes" required>
@@ -113,24 +121,47 @@
             <button type="submit">Predecir</button>
         </form>
         <div id="result"></div>
+        <div id="error"></div>
     </div>
 
     <script>
-        document.getElementById('prediction-form').addEventListener('submit', async function(event) {
-            event.preventDefault();
-            const formData = new FormData(event.target);
-            const data = Object.fromEntries(formData.entries());
+        const comunidadProvincias = {
+            "Andalucía": ["Almería", "Cádiz", "Córdoba", "Granada", "Huelva", "Jaén", "Málaga", "Sevilla"],
+            "Aragón": ["Huesca", "Teruel", "Zaragoza"],
+            "Asturias, Principado de": ["Asturias"],
+            "Balears, Illes": ["Balears, Illes"],
+            "Canarias": ["Palmas, Las", "Santa Cruz de Tenerife"],
+            "Cantabria": ["Cantabria"],
+            "Castilla y León": ["Ávila", "Burgos", "León", "Palencia", "Salamanca", "Segovia", "Soria", "Valladolid", "Zamora"],
+            "Castilla - La Mancha": ["Albacete", "Ciudad Real", "Cuenca", "Guadalajara", "Toledo"],
+            "Cataluña": ["Barcelona", "Girona", "Lleida", "Tarragona"],
+            "Comunitat Valenciana": ["Alicante/Alacant", "Castellón/Castelló", "Valencia/València"],
+            "Extremadura": ["Badajoz", "Cáceres"],
+            "Galicia": ["Coruña, A", "Lugo", "Ourense", "Pontevedra"],
+            "Madrid, Comunidad de": ["Madrid"],
+            "Murcia, Región de": ["Murcia"],
+            "Navarra, Comunidad Foral de": ["Navarra"],
+            "País Vasco": ["Araba/Álava", "Bizkaia", "Gipuzkoa"],
+            "Rioja, La": ["Rioja, La"],
+            "Ceuta": ["Ceuta"],
+            "Melilla": ["Melilla"]
+        };
 
-            const response = await fetch('/predict', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(data)
-            });
+        const comunidadesSelect = document.getElementById('Comunidades');
+        const provinciasSelect = document.getElementById('Provincias');
 
-            const result = await response.json();
-            document.getElementById('result').innerText = `Predicción: ${result.prediction}`;
+        comunidadesSelect.addEventListener('change', function () {
+            const comunidad = comunidadesSelect.value;
+            provinciasSelect.innerHTML = '<option value="">Selecciona una provincia</option>';
+
+            if (comunidadProvincias[comunidad]) {
+                comunidadProvincias[comunidad].forEach(provincia => {
+                    const option = document.createElement('option');
+                    option.value = provincia;
+                    option.textContent = provincia;
+                    provinciasSelect.appendChild(option);
+                });
+            }
         });
     </script>
 </body>
