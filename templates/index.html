@@ -21,12 +21,12 @@
             background-color: #fff;
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 0 10px rgba(96, 16, 99, 0.1);
             max-width: 500px;
             width: 100%;
         }
         h1 {
-            color:rgb(158, 74, 226);
+            color:rgb(98, 97, 99);
             text-align: center;
         }
         label {
@@ -41,7 +41,7 @@
             border-radius: 4px;
         }
         button {
-            background-color: rgb(190, 74, 226);
+            background-color: rgb(218, 85, 218);
             color: #fff;
             padding: 10px 15px;
             border: none;
@@ -51,7 +51,7 @@
             width: 100%;
         }
         button:hover {
-            background-color: rgb(194, 80, 150);
+            background-color: rgb(218, 85, 218);
         }
         #result {
             margin-top: 20px;
@@ -123,8 +123,11 @@
         <div id="result"></div>
         <div id="error"></div>
     </div>
-
     <script>
+        const comunidadesSelect = document.getElementById('Comunidades');
+        const provinciasSelect = document.getElementById('Provincias');
+
+
         const comunidadProvincias = {
             "Andalucía": ["Almería", "Cádiz", "Córdoba", "Granada", "Huelva", "Jaén", "Málaga", "Sevilla"],
             "Aragón": ["Huesca", "Teruel", "Zaragoza"],
@@ -142,27 +145,124 @@
             "Murcia, Región de": ["Murcia"],
             "Navarra, Comunidad Foral de": ["Navarra"],
             "País Vasco": ["Araba/Álava", "Bizkaia", "Gipuzkoa"],
-            "Rioja, La": ["Rioja, La"],
+            "Rioja, La": ["La Rioja"  ],
             "Ceuta": ["Ceuta"],
             "Melilla": ["Melilla"]
         };
-
-        const comunidadesSelect = document.getElementById('Comunidades');
-        const provinciasSelect = document.getElementById('Provincias');
+        
+        const provinceToCode = {
+            "Almería": "04 Almería",
+            "Cádiz": "11 Cádiz",
+            "Córdoba": "14 Córdoba",
+            "Granada": "18 Granada",
+            "Huelva": "21 Huelva",
+            "Jaén": "23 Jaén",
+            "Málaga": "29 Málaga",
+            "Sevilla": "41 Sevilla",
+            "Huesca": "22 Huesca",
+            "Teruel": "44 Teruel",
+            "Zaragoza": "50 Zaragoza",
+            "Asturias": "33 Asturias",
+            "Balears, Illes": "07 Balears, Illes",
+            "Palmas, Las": "35 Palmas, Las",
+            "Santa Cruz de Tenerife": "38 Santa Cruz de Tenerife",
+            "Cantabria": "39 Cantabria",
+            "Ávila": "05 Ávila",
+            "Burgos": "09 Burgos",
+            "León": "24 León",
+            "Palencia": "34 Palencia",
+            "Salamanca": "37 Salamanca",
+            "Segovia": "40 Segovia",
+            "Soria": "42 Soria",
+            "Valladolid": "47 Valladolid",
+            "Zamora": "49 Zamora",
+            "Albacete": "02 Albacete",
+            "Ciudad Real": "13 Ciudad Real",
+            "Cuenca": "16 Cuenca",
+            "Guadalajara": "19 Guadalajara",
+            "Toledo": "45 Toledo",
+            "Barcelona": "08 Barcelona",
+            "Girona": "17 Girona",
+            "Lleida": "25 Lleida",
+            "Tarragona": "43 Tarragona",
+            "Alicante/Alacant": "03 Alicante/Alacant",
+            "Castellón/Castelló": "12 Castellón/Castelló",
+            "Valencia/València": "46 Valencia/València",
+            "Badajoz": "06 Badajoz",
+            "Cáceres": "10 Cáceres",
+            "Coruña, A": "15 Coruña, A",
+            "Lugo": "27 Lugo",
+            "Ourense": "32 Ourense",
+            "Pontevedra": "36 Pontevedra",
+            "Madrid": "28 Madrid",
+            "Murcia": "30 Murcia",
+            "Navarra": "31 Navarra",
+            "Araba/Álava": "01 Araba/Álava",
+            "Bizkaia": "48 Bizkaia",
+            "Gipuzkoa": "20 Gipuzkoa",
+            "La Rioja": "26 Rioja, La",
+            "Ceuta": "51 Ceuta",
+            "Melilla": "52 Melilla"
+        };
+        
 
         comunidadesSelect.addEventListener('change', function () {
-            const comunidad = comunidadesSelect.value;
-            provinciasSelect.innerHTML = '<option value="">Selecciona una provincia</option>';
-
+            const comunidad = comunidadesSelect.value; // Obtener la comunidad seleccionada
+            provinciasSelect.innerHTML = '<option value="">Selecciona una provincia</option>'; // Reiniciar las opciones de provincias
+        
+            // Verificar si la comunidad tiene provincias asignadas
             if (comunidadProvincias[comunidad]) {
                 comunidadProvincias[comunidad].forEach(provincia => {
+                    // Obtener el código de la provincia o usar el nombre directamente si no está en el mapa
+                    const provinceCode = provinceToCode[provincia] || provincia;
+        
+                    // Crear una nueva opción para la provincia
                     const option = document.createElement('option');
-                    option.value = provincia;
-                    option.textContent = provincia;
-                    provinciasSelect.appendChild(option);
+                    option.value = provinceCode; // Valor enviado al backend
+                    option.textContent = provincia; // Texto mostrado al usuario
+                    provinciasSelect.appendChild(option); // Agregar la opción al campo de selección
                 });
             }
         });
+        
+        
+       
+
+        document.getElementById('prediction-form').addEventListener('submit', async function(event) {
+            event.preventDefault();
+        
+            // Limpiar resultados anteriores
+            document.getElementById('result').innerText = '';
+            document.getElementById('error').innerText = '';
+        
+            const formData = new FormData(event.target);
+            const data = Object.fromEntries(formData.entries());
+        
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+        
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+        
+                const result = await response.json();
+                document.getElementById('result').innerText = `Predicción: ${result.prediction}%`;
+        
+                // Reiniciar el formulario
+                event.target.reset();
+            } catch (error) {
+                document.getElementById('error').innerText = `Error: ${error.message}`;
+            }
+        });
+        
+        
+
     </script>
 </body>
 </html>

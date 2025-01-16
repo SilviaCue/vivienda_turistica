@@ -5,9 +5,19 @@ from pydantic import BaseModel
 import pandas as pd
 import pickle
 import os
+import unicodedata  
+import logging
+
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
+
+logging.basicConfig(level=logging.INFO)
+logging.info("Servidor iniciado correctamente.")
+
+# Función de normalización
+def normalize(text):
+    return unicodedata.normalize('NFKD', text).encode('ASCII', 'ignore').decode('utf-8').lower()
 
 # Mapeo de provincias a códigos (completo)
 province_to_code = {
@@ -65,6 +75,9 @@ province_to_code = {
     "52 Melilla": 52
 }
 
+# Normalizar las claves del mapeo
+province_to_code_normalized = {normalize(key): value for key, value in province_to_code.items()}
+
 base_dir = os.path.dirname(os.path.abspath(__file__))
 model_path = os.path.join(base_dir, "random_forest_model.pkl")
 data_path = os.path.join(base_dir, "datos_vivienda_clean.csv")
@@ -73,8 +86,28 @@ data_path = os.path.join(base_dir, "datos_vivienda_clean.csv")
 if os.path.exists(model_path):
     with open(model_path, "rb") as file:
         model = pickle.load(file)
+    # Prueba del modelo al iniciar
+    test_data = pd.DataFrame([{
+        "Provincias_Cod": 28,  # Código para Madrid
+        "Año": 2023,
+        "Mes": 5,
+        "Total_scaled": 0.5
+    }])
+    try:
+        test_prediction = model.predict(test_data)[0]
+        logging.info(f"Prueba del modelo exitosa. Predicción: {test_prediction}")
+    except Exception as e:
+        logging.error(f"Error al probar el modelo: {e}")
 else:
     raise FileNotFoundError(f"El archivo del modelo '{model_path}' no se encuentra.")
+
+
+
+# Cargar datos preprocesados
+if os.path.exists(data_path):
+    data = pd.read_csv(data_path)
+else:
+    raise FileNotFoundError(f"El archivo de datos '{data_path}' no se encuentra.")
 
 # Modelo de entrada para predicción
 class PredictionRequest(BaseModel):
@@ -86,31 +119,36 @@ class PredictionRequest(BaseModel):
 def read_root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
+
 @app.post("/predict")
 def predict(request: PredictionRequest):
+    logging.info("El endpoint /predict fue llamado.")
     try:
-        print("Datos recibidos para predicción:", request.dict())
-
-        if request.Año <= 0:
-            raise HTTPException(status_code=400, detail="El año debe ser positivo.")
-
+        # Crear un nuevo DataFrame con los datos recibidos
         input_data = pd.DataFrame([request.dict()])
-        input_data["Provincias_Cod"] = input_data["Provincias"].map(province_to_code)
+        logging.info(f"Datos recibidos: {input_data}")
 
+        # Normalizar y mapear provincia a código
+        input_data["Provincias_Cod"] = input_data["Provincias"].apply(normalize).map(province_to_code_normalized)
+
+        # Validar si alguna provincia es inválida
         if input_data["Provincias_Cod"].isnull().any():
+            logging.error("Provincia no válida.")
             raise HTTPException(status_code=400, detail="Provincia no válida.")
 
+        # Agregar columna requerida por el modelo
         input_data["Total_scaled"] = 0.5
 
+        # Validar columnas
         expected_columns = ["Provincias_Cod", "Año", "Mes", "Total_scaled"]
-        missing_columns = [col for col in expected_columns if col not in input_data.columns]
-        if missing_columns:
-            raise HTTPException(status_code=400, detail=f"Faltan columnas: {', '.join(missing_columns)}")
+        logging.info(f"Datos procesados para el modelo: {input_data[expected_columns]}")
 
-        print("Datos procesados para el modelo:", input_data)
+        # Realizar predicción
+        prediction = model.predict(input_data[expected_columns])[0]
+        logging.info(f"Predicción realizada: {prediction}")
 
-        prediction = model.predict(input_data)[0]
         return {"prediction": round(prediction, 2)}
     except Exception as e:
+        logging.error(f"Error durante la predicción: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
