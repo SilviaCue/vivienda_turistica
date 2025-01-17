@@ -3,11 +3,10 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 import pandas as pd
-import pickle
-import os
-import unicodedata  
+import unicodedata
 import logging
-
+import joblib
+import os
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -19,7 +18,7 @@ logging.info("Servidor iniciado correctamente.")
 def normalize(text):
     return unicodedata.normalize('NFKD', text).encode('ASCII', 'ignore').decode('utf-8').lower()
 
-# Mapeo de provincias a códigos (completo)
+# Mapeo de provincias a códigos
 province_to_code = {
     "01 Araba/Álava": 1,
     "02 Albacete": 2,
@@ -79,29 +78,45 @@ province_to_code = {
 province_to_code_normalized = {normalize(key): value for key, value in province_to_code.items()}
 
 base_dir = os.path.dirname(os.path.abspath(__file__))
-model_path = os.path.join(base_dir, "random_forest_model.pkl")
+model_path = os.path.join(base_dir, "gradient_boosting_model.pkl")
 data_path = os.path.join(base_dir, "datos_vivienda_clean.csv")
 
-# Cargar modelo
+# Cargar el modelo
 if os.path.exists(model_path):
-    with open(model_path, "rb") as file:
-        model = pickle.load(file)
-    # Prueba del modelo al iniciar
-    test_data = pd.DataFrame([{
-        "Provincias_Cod": 28,  # Código para Madrid
-        "Año": 2023,
-        "Mes": 5,
-        "Total_scaled": 0.5
-    }])
     try:
-        test_prediction = model.predict(test_data)[0]
-        logging.info(f"Prueba del modelo exitosa. Predicción: {test_prediction}")
+        model = joblib.load(model_path)
+        logging.info("Modelo cargado exitosamente.")
+        logging.info(f"Tipo del modelo cargado: {type(model)}")
+        logging.info(f"Columnas esperadas por el modelo: {model.feature_names_in_}")
     except Exception as e:
-        logging.error(f"Error al probar el modelo: {e}")
+        logging.error(f"Error al cargar el modelo: {e}")
+        raise FileNotFoundError("No se pudo cargar el modelo.")
 else:
     raise FileNotFoundError(f"El archivo del modelo '{model_path}' no se encuentra.")
 
+# Probar el modelo al iniciar
+try:
+    test_data = pd.DataFrame([{
+        "Provincias_Cod": 28,  # 
+        "Año": 2080,
+        "Mes": 5,
+        "Total_scaled": 0.8
+    }])
 
+    # Verificar las columnas esperadas por el modelo
+    expected_columns = list(model.feature_names_in_)
+    if not all(col in test_data.columns for col in expected_columns):
+        raise ValueError(f"Las columnas de entrada no coinciden. Se esperaban: {expected_columns}, pero se encontraron: {test_data.columns.tolist()}")
+
+    # Reorganizar las columnas según lo esperado por el modelo
+    test_data = test_data[expected_columns]
+
+    # Realizar predicción de prueba
+    test_prediction = model.predict(test_data)[0]
+    logging.info(f"Prueba del modelo exitosa. Predicción: {test_prediction}")
+except Exception as e:
+    logging.error(f"Error durante la prueba del modelo: {e}")
+    raise
 
 # Cargar datos preprocesados
 if os.path.exists(data_path):
@@ -119,36 +134,53 @@ class PredictionRequest(BaseModel):
 def read_root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
+ # Registrar los datos enviados al modelo
+    logging.info(f"Datos enviados al modelo: {input_data}")
+
 
 @app.post("/predict")
 def predict(request: PredictionRequest):
     logging.info("El endpoint /predict fue llamado.")
+    logging.info(f"Datos recibidos del usuario: {request.dict()}")
     try:
-        # Crear un nuevo DataFrame con los datos recibidos
+        # Crear un DataFrame con los datos recibidos
         input_data = pd.DataFrame([request.dict()])
-        logging.info(f"Datos recibidos: {input_data}")
 
-        # Normalizar y mapear provincia a código
+        # Normalizar y mapear provincia
         input_data["Provincias_Cod"] = input_data["Provincias"].apply(normalize).map(province_to_code_normalized)
 
-        # Validar si alguna provincia es inválida
+        # Validar si la provincia es válida
         if input_data["Provincias_Cod"].isnull().any():
             logging.error("Provincia no válida.")
-            raise HTTPException(status_code=400, detail="Provincia no válida.")
+            raise HTTPException(status_code=400, detail="Provincia no válida. Verifique los datos ingresados.")
 
-        # Agregar columna requerida por el modelo
-        input_data["Total_scaled"] = 0.5
+        # Calcular `Total_scaled` basado en datos históricos
+        mean_scaled = data.loc[
+            (data["Provincias_Cod"] == input_data["Provincias_Cod"].iloc[0]) &
+            (data["Mes"] == input_data["Mes"].iloc[0]),
+            "Total_scaled"
+        ].mean()
 
-        # Validar columnas
-        expected_columns = ["Provincias_Cod", "Año", "Mes", "Total_scaled"]
-        logging.info(f"Datos procesados para el modelo: {input_data[expected_columns]}")
+        # Usar la media calculada o un valor predeterminado si no hay datos
+        input_data["Total_scaled"] = mean_scaled if not pd.isnull(mean_scaled) else 0.5
 
-        # Realizar predicción
-        prediction = model.predict(input_data[expected_columns])[0]
+        # Verificar las columnas esperadas por el modelo
+        expected_columns = list(model.feature_names_in_)
+        if not all(col in input_data.columns for col in expected_columns):
+            raise HTTPException(status_code=400, detail=f"Las columnas de entrada no coinciden. Se esperaban: {expected_columns}")
+
+        # Reorganizar las columnas según lo esperado por el modelo
+        input_data = input_data[expected_columns]
+
+        # Registrar los datos enviados al modelo
+        logging.info(f"Datos enviados al modelo: {input_data}")
+
+        # Realizar la predicción
+        prediction = model.predict(input_data)[0]
         logging.info(f"Predicción realizada: {prediction}")
-
         return {"prediction": round(prediction, 2)}
     except Exception as e:
         logging.error(f"Error durante la predicción: {e}")
         raise HTTPException(status_code=400, detail=str(e))
-
+    
+   
